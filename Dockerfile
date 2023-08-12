@@ -1,7 +1,7 @@
 # Fetch the mc command line client
 FROM alpine:3.18.3
 RUN apk update && apk add ca-certificates wget && update-ca-certificates
-RUN wget -O /tmp/mc https://dl.minio.io/client/mc/release/linux-amd64/mc
+RUN ARCH=$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/) && wget -O /tmp/mc "https://dl.minio.io/client/mc/release/linux-${ARCH}/mc"
 RUN chmod +x /tmp/mc
 
 # Then build our backup image
