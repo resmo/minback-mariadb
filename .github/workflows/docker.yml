@@ -6,7 +6,7 @@ on:
     branches: [ main ]
 
 env:
-  IMAGE: minback/mysql
+  IMAGE_NAME: minback-mysql
 
 jobs:
   test:
@@ -16,45 +16,66 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build Dockerfile
-        run: docker build . --file Dockerfile
-          
-  push:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  push:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build image
-        run: docker build . --file Dockerfile --tag image
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
-      - name: Log into registries
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
-          echo "${{ secrets.DOCKER_HUB }}" | docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
-          
-      - name: Calculate version number
-        id: version
-        run: |
-          VERSION=$(git describe --tags 2>/dev/null || git rev-parse --short HEAD)
-          echo "::set-output name=version::$VERSION"
-          
-      - name: Push image to GitHub
-        run: |
-          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/${{ github.event.repository.name }}
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          docker tag image $IMAGE_ID:latest
-          docker push $IMAGE_ID:latest
-          docker tag image $IMAGE_ID:${{ steps.version.outputs.version }}
-          docker push $IMAGE_ID:${{ steps.version.outputs.version }}
-          
-      - name: Push image to Docker Hub
-        run: |
-          IMAGE_ID=${{ env.IMAGE }}
-          echo IMAGE_ID=$IMAGE_ID
-          docker tag image $IMAGE_ID:latest
-          docker push $IMAGE_ID:latest
-          docker tag image $IMAGE_ID:${{ steps.version.outputs.version }}
-          docker push $IMAGE_ID:${{ steps.version.outputs.version }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          pull: true
+          platforms: linux/arm64,linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
