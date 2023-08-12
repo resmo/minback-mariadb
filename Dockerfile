@@ -6,7 +6,6 @@ RUN chmod +x /tmp/mc
 
 # Then build our backup image
 FROM mariadb:11.0.2-jammy
-LABEL maintainer="Benjamin Pannell <admin@sierrasoftworks.com>"
 
 # Install the latest ca-certificates package to resolve Lets Encrypt auth issues
 RUN apt-get update && apt-get install ca-certificates
