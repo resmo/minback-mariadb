@@ -9,8 +9,8 @@ mc config host add pg "$MINIO_SERVER" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" --
 ARCHIVE="${MINIO_BUCKET}/${DB}-$(date "$DATE_FORMAT").archive"
 
 echo "Dumping $DB to $ARCHIVE"
-echo "> mysqldump $DB ${ARGS[*]}"
+echo "> mariadb-dump $DB ${ARGS[*]}"
 
-mysqldump "$DB" "${ARGS[@]}" | mc pipe "pg/$ARCHIVE" || { echo "Backup failed"; mc rm "pg/$ARCHIVE"; exit 1; }
+mariadb-dump "$DB" "${ARGS[@]}" | mc pipe "pg/$ARCHIVE" || { echo "Backup failed"; mc rm "pg/$ARCHIVE"; exit 1; }
 
 echo "Backup complete"
