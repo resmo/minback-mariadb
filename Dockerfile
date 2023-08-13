@@ -6,9 +6,10 @@ RUN chmod +x /tmp/mc
 
 # Then build our backup image
 FROM mariadb:11
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install the latest ca-certificates package to resolve Lets Encrypt auth issues
-RUN apt-get update && apt-get install ca-certificates
+RUN apt-get -y update && apt-get install -y ca-certificates bzip2
 
 COPY --from=0 /tmp/mc /usr/bin/mc
 
