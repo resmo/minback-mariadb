@@ -1,0 +1,48 @@
+# End-to-end test environment. Driven by tests/e2e/run.sh.
+services:
+  mariadb:
+    image: docker.io/library/mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpw
+      MARIADB_DATABASE: shop
+    volumes:
+      - ./seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro,z
+
+  # Any S3-compatible server works; RustFS is used as MinIO no longer ships public images.
+  s3:
+    image: docker.io/rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: s3admin
+      RUSTFS_SECRET_KEY: s3secret
+
+  ftp:
+    image: docker.io/delfer/alpine-ftp-server:latest
+    environment:
+      USERS: "backup|ftpsecret|/home/backup"
+      ADDRESS: ftp
+      MIN_PORT: "21000"
+      MAX_PORT: "21010"
+
+  # Prints every webhook POST body to its log.
+  webhook:
+    image: docker.io/library/python:3-alpine
+    command:
+      - python
+      - -c
+      - |
+        import http.server, sys
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                print("WEBHOOK", self.rfile.read(int(self.headers["Content-Length"])).decode(), flush=True)
+                self.send_response(204); self.end_headers()
+        http.server.HTTPServer(("", 8000), H).serve_forever()
+
+  minback:
+    image: minback-mariadb:dev
+    command: ["serve"]
+    env_file: test.env
+    environment:
+      API_TOKEN: t0ken
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on: [mariadb, s3, ftp, webhook]
