@@ -1,33 +1,29 @@
-# Fetch the mc command line client
-FROM alpine:3
-RUN apk update && apk add ca-certificates wget && update-ca-certificates
-RUN ARCH=$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/) && wget -O /tmp/mc "https://dl.minio.io/client/mc/release/linux-${ARCH}/mc"
-RUN chmod +x /tmp/mc
-
-# Then build our backup image
-FROM mariadb:11
+# mariadb provides mariadb-dump; the app itself is Python, installed with uv.
+FROM mariadb:lts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install the latest ca-certificates package to resolve Lets Encrypt auth issues
-RUN apt-get -y update && apt-get install -y ca-certificates bzip2
+RUN apt-get -y update \
+    && apt-get install -y --no-install-recommends ca-certificates python3 \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY --from=0 /tmp/mc /usr/bin/mc
+ENV UV_PYTHON_DOWNLOADS=never \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv
 
-ENV MINIO_SERVER=""
-ENV MINIO_BUCKET="backups"
-ENV MINIO_ACCESS_KEY=""
-ENV MINIO_SECRET_KEY=""
-ENV MINIO_API_VERSION="S3v4"
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/bin/uv \
+    uv sync --frozen --no-dev --no-install-project
 
-ENV DB=""
-ENV DB_HOST="localhost"
-ENV DB_PORT="3306"
-ENV DB_USER="root"
-ENV DB_PASSWORD=""
+COPY README.md ./
+COPY minback ./minback
+RUN --mount=from=ghcr.io/astral-sh/uv:latest,source=/uv,target=/bin/uv \
+    uv sync --frozen --no-dev --no-editable
 
-ENV DATE_FORMAT="+%Y-%m-%d-%H%M"
+# Configuration defaults live in minback/config.py; see README.md.
+ENV PYTHONUNBUFFERED=1
 
-ADD entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-ENTRYPOINT [ "/app/entrypoint.sh" ]
+EXPOSE 8080
+ENTRYPOINT ["/opt/venv/bin/minback"]
+CMD ["run"]
